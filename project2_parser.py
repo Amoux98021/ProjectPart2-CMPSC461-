@@ -44,9 +44,29 @@ class Lexer:
 
     # implement
     def number(self):
+        num_str = ''
+        is_float = False
+
+        while self.current_char is not None and (self.current_char.isdigit() or self.current_char == '.'):
+            if self.current_char == '.':
+                if is_float:  # Second dot in number, Error
+                    self.error()
+                is_float = True
+            num_str += self.current_char
+            self.advance()
+
+        if is_float:
+            return (float(num_str), 1)  # Returning tuple with FLOAT flag
+        else:
+            return (int(num_str), 0)  # Returning tuple with INT flag
 
     # implement
     def identifier(self):
+        result = ''
+        while self.current_char is not None and (self.current_char.isalnum() or self.current_char == '_'):
+            result += self.current_char
+            self.advance()
+        return result
 
 
     def get_next_token(self):
@@ -112,6 +132,12 @@ class Lexer:
 
     #implement
     def keyword_or_identifier(self):
+        ident = self.identifier()
+        keywords = {'if', 'then', 'else', 'while', 'do', 'int', 'float'}
+        if ident in keywords:
+            return Token(ident.upper(), ident)  # Return as uppercase token type for keywords
+        else:
+            return Token('VARIABLE', ident)
 
     #implement
     def operator(self):
@@ -199,7 +225,7 @@ class Parser:
     def __init__(self, lexer):
         self.lexer = lexer
         self.current_token = self.lexer.get_next_token()
-        # implement symbol table and scopes
+        self.scopes = [{}]  # Initializing with a global scope
        
         self.messages = []
 
@@ -262,13 +288,15 @@ class Parser:
 
     # enter the new scope in the program
     def enter_scope(self, scope_prefix):
+        self.scopes.append({})
         
     # leave the current scope
     def leave_scope(self):
+        self.scopes.pop()
         
     # return the current scope
     def current_scope(self):
-        
+        return self.scopes[-1]
 
     def checkVarDeclared(self, identifier):
         
@@ -298,12 +326,25 @@ class Parser:
 
     def parse_statement(self):
 
-
     def parse_declaration(self):
-
+        self.eat('TYPE')  # Assuming TYPE token for int/float
+        var_type = self.current_token.value
+        self.eat('VARIABLE')
+        var_name = self.current_token.value
+        self.eat('OPERATOR', '=')
+        expression = self.parse_arithmetic_expression()
+        # Checking logic 
+        self.declare_variable(var_name, var_type)
+        return DeclarationNode(var_name, expression, var_type)
 
     def parse_assignment(self):
-
+        var_name = self.current_token.value
+        var_type = self.find_variable(var_name)
+        self.eat('VARIABLE')
+        self.eat('OPERATOR', '=')
+        expression = self.parse_arithmetic_expression()
+        # Checking logic
+        return AssignmentNode(var_name, expression)
 
     def parse_if_statement(self):
  
@@ -318,6 +359,16 @@ class Parser:
         return ConditionNode(left, operator, right)
 
     def parse_arithmetic_expression(self):
+        node = self.parse_term()
+        while self.current_token.type in ('PLUS', 'MINUS'):
+            token = self.current_token
+            self.eat(token.type)
+            right = self.parse_term()
+            # Check consistency between the left and right parts of the expression
+            if node.type != right.type:
+                self.error("Type mismatch in arithmetic expression")
+            node = ArithmeticExpressionNode(token.type, node, right, node.type)
+        return node
 
         
 
