@@ -1,0 +1,15 @@
+program                -> statement*
+statement              -> declaration | assignment | if_statement | while_loop
+declaration            -> type variable '=' arithmetic_expression
+assignment             -> variable '=' arithmetic_expression
+arithmetic_expression  -> term (('+' | '-') term)*
+term                   -> factor (('*' | '/') factor)*
+factor                 -> number | variable | '(' arithmetic_expression ')'
+if_statement           -> 'if' condition 'then' '{' statement* '}' ('else' '{' statement* '}')?
+while_loop             -> 'while' condition 'do' '{' statement* '}'
+condition              -> arithmetic_expression ('==' | '!=' | '<' | '>' | '<=' | '>=' ) arithmetic_expression
+variable               -> letter (letter | digit)*
+number                 -> (digit+ '.' digit+) | digit+
+letter                 -> 'a' | 'b' | ... | 'z' | 'A' | 'B' | ... | 'Z'
+digit                  -> '0' | '1' | ... | '9'
+type                   -> 'int' | 'float'
