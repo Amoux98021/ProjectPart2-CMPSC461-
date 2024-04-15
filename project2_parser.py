@@ -44,21 +44,20 @@ class Lexer:
 
     # implement
     def number(self):
-        num_str = ''
+        result = ''
         is_float = False
-
-        while self.current_char is not None and (self.current_char.isdigit() or self.current_char == '.'):
-            if self.current_char == '.':
-                if is_float:  # Second dot in number, Error
-                    self.error()
-                is_float = True
-            num_str += self.current_char
+        while self.current_char is not None and self.current_char.isdigit():
+            result += self.current_char
             self.advance()
 
-        if is_float:
-            return (float(num_str), 1)  # Returning tuple with FLOAT flag
-        else:
-            return (int(num_str), 0)  # Returning tuple with INT flag
+        if self.current_char == '.':
+            result += self.current_char
+            self.advance()
+            is_float = True
+            while self.current_char is not None and self.current_char.isdigit():
+                result += self.current_char
+                self.advance()
+        return (result, is_float)
 
     # implement
     def identifier(self):
@@ -129,35 +128,37 @@ class Lexer:
                 self.error()
         return Token('EOF')
 
-    #implement
     def keyword_or_identifier(self):
-        ident = self.identifier()
-        keywords = {'if', 'then', 'else', 'while', 'do', 'int', 'float'}
-        if ident in keywords:
-            return Token(ident.upper(), ident)  # Return as uppercase token type for keywords
+        result = self.identifier()
+        if result in ['int', 'float']:  # You can expand this list with more keywords
+            return Token('KEYWORD', result)
         else:
-            return Token('VARIABLE', ident)
+            return Token('IDENTIFIER', result)
 
     #implement
     def operator(self):
-        op_char = self.current_char
-        if op_char in ('+', '-', '*', '/', '=', '>', '<', '!', '==', '!=', '<=', '>='):
+        char = self.current_char
+        if char in '+-*/':
             self.advance()
-            # Handling two-character operators
-            if op_char == '=' and self.current_char == '=':
+            return Token('OPERATOR', char)
+        elif char == '=':
+            self.advance()
+            if self.current_char == '=':
                 self.advance()
                 return Token('OPERATOR', '==')
-            elif op_char == '!' and self.current_char == '=':
+            return Token('OPERATOR', '=')
+        elif char == '!':
+            self.advance()
+            if self.current_char == '=':
                 self.advance()
                 return Token('OPERATOR', '!=')
-            elif op_char == '<' and self.current_char == '=':
+            self.error()
+        elif char in '<>':
+            self.advance()
+            if self.current_char == '=':
+                char += '='
                 self.advance()
-                return Token('OPERATOR', '<=')
-            elif op_char == '>' and self.current_char == '=':
-                self.advance()
-                return Token('OPERATOR', '>=')
-            else:  # Single-character operators
-                return Token('OPERATOR', op_char)
+            return Token('OPERATOR', char)
         else:
             self.error()
 
@@ -221,6 +222,9 @@ class FactorNode(Node):
         self.value = value
         self.type = myType
 
+
+
+
 # final parser - student copy
 
 # Skelton of Parser class.
@@ -236,11 +240,12 @@ class FactorNode(Node):
   # For those who are interested, you call print_parse_tree to view the text representation
   # of Parse Tree.
 
+
 class Parser:
     def __init__(self, lexer):
         self.lexer = lexer
         self.current_token = self.lexer.get_next_token()
-        self.scopes = [{}]  # Initializing with a global scope
+        self.scope_stack = [{}]  # Start with one global scope
        
         self.messages = []
 
@@ -291,10 +296,21 @@ class Parser:
 
         return message
 
+
     def error(self, message):
         self.messages.append(message)
 
+    #def eat(self, token_type, token_value=None):
+    #    if self.current_token.type == token_type:
+    #        if token_value is None or self.current_token.value == token_value:
+    #            self.current_token = self.lexer.get_next_token()
+    #        else:
+    #            self.error(f'Expected token "{token_value}", but found "{self.current_token.value}"')
+    #    else:
+    #        self.error(f'Expected token type {token_type}, but found {self.current_token.type}')
+
     def eat(self, token_type):
+        print(f"Eating {token_type}, current token is {self.current_token.type}: {self.current_token.value}")
         if self.current_token.type == token_type:
             self.current_token = self.lexer.get_next_token()
         else:
@@ -302,60 +318,53 @@ class Parser:
 
     # enter the new scope in the program
     def enter_scope(self, scope_prefix):
-        self.scopes.append({})
-        
+        self.scope_stack.append({})
     # leave the current scope
     def leave_scope(self):
-        if len(self.scopes) > 1:
-            self.scopes.pop()
+        if len(self.scope_stack) > 1:
+            self.scope_stack.pop()
         else:
-            self.error("Error- Trying to leave global scope.")
-        
+            self.error("Attempted to leave global scope.")       
     # return the current scope
     def current_scope(self):
-        return self.scopes[-1]
+        return self.scope_stack[-1]
+
+    def declare_variable(self, var_name, var_type):
+        scope = self.current_scope()
+        if var_name in scope:
+            self.error(f"Variable '{var_name}' already declared in this scope.")
+        scope[var_name] = var_type
+
+    def find_variable(self, var_name):
+        for scope in reversed(self.scope_stack):
+            if var_name in scope:
+                return scope[var_name]
+        self.error(f"Variable '{var_name}' not declared in any accessible scope.")
+        return None
 
     def checkVarDeclared(self, identifier):
-        for scope in reversed(self.scopes):
-            if identifier in scope:
-                return True
-        self.error(f"Variable '{identifier}' is not declared.")
-        return False
-
-    def declare_variable(self, identifier, var_type):
-        current_scope = self.scopes[-1]
-        if identifier in current_scope:
-            self.error(f"Variable '{identifier}' is already declared in the current scope.")
-        else:
-            current_scope[identifier] = var_type
-
-    #def checkVarDeclared(self, identifier):
-        
-    #    if #implement :
-    #        self.error(f'Variable {identifier} has already been declared in the current scope')
+        # Check if the variable has been declared in the current scope
+        scope = self.current_scope()
+        if identifier in scope:
+            self.error(f"Variable '{identifier}' has already been declared in the current scope.")
 
     def checkVarUse(self, identifier):
-        # check var declared, so we can use it.
-        if not self.checkVarDeclared(identifier):
-            self.error(f"Variable '{identifier}' used before declaration.")
+        # Check if the variable has been declared in any accessible scope
+        if self.find_variable(identifier) is None:
+            self.error(f"Variable '{identifier}' has not been declared in the current or any enclosing scopes.")
 
     # return false when types mismatch, otherwise ret true
-    def checkTypeMatch(self, vType, eType, var, exp):
-        # This method checks for type consistency between two variables or expressions.
-        if vType != eType:
-            self.error(f'Type mismatch between {vType} and {eType} in {var} = {exp}.')
-            return False
-        return True
+    def checkTypeMatch(self, expected_type, actual_type):
+        # Check if the variable's type matches the expected type
+        if expected_type != actual_type:
+            self.error(f"Type mismatch: Expected {expected_type}, found {actual_type}")
+        return expected_type == actual_type
 
     # return its type or None if not found
     def getMyType(self, identifier):
-        # This method retrieves the type of a variable if it has been declared.
-        for scope in reversed(self.scopes):
-            if identifier in scope:
-                return scope[identifier]
-        self.error(f'Variable {identifier} is not declared.')
-        return None
-      
+        # Retrieve the type of the variable if declared
+        return self.find_variable(identifier)
+
     def parse_program(self):
         statements = []
         while self.current_token.type != 'EOF':
@@ -365,82 +374,94 @@ class Parser:
         return ProgramNode(statements)
 
     def parse_statement(self):
-        if self.current_token.type == 'IF':
-            return self.parse_if_statement()
-        elif self.current_token.type == 'WHILE':
-            return self.parse_while_loop()
-        elif self.current_token.type == 'TYPE':  # Assuming you have a TYPE token
+        if self.current_token.type == 'KEYWORD':
             return self.parse_declaration()
-        elif self.current_token.type == 'VARIABLE':
+        elif self.current_token.type == 'IDENTIFIER':
             return self.parse_assignment()
+        elif self.current_token.value == 'if':
+            return self.parse_if_statement()
+        elif self.current_token.value == 'while':
+            return self.parse_while_loop()
         else:
-            self.error("Error- Unrecognized statement starting with token: " + self.current_token.type)
+            self.error(f"Unexpected token {self.current_token.value}")
 
     def parse_declaration(self):
-        self.eat('TYPE')
-        type_token = self.current_token
-        self.eat('VARIABLE')
-        var_name = type_token.value
-        self.eat('EQUALS')
-        expr = self.parse_arithmetic_expression()
-        # Assume type checking and declaration logic here.
-        self.declare_variable(var_name, expr.type)
-        return DeclarationNode(var_name, expr, expr.type)
+        var_type = self.current_token.value
+        self.eat('KEYWORD')
+        var_name = self.current_token.value
+        self.eat('IDENTIFIER')
+        self.eat('OPERATOR', '=')
+        expr = self.parse_expression()
+        # Variable declaration type checking
+        expr_type = self.getMyType(expr.identifier) if isinstance(expr, FactorNode) else None
+        self.checkTypeMatch(var_type, expr_type)
+        self.declare_variable(var_name, var_type)
+        return DeclarationNode(var_name, expr, var_type)
 
     def parse_assignment(self):
         var_name = self.current_token.value
-        self.eat('VARIABLE')
-        self.eat('EQUALS')
-        expr = self.parse_arithmetic_expression()
-        if self.getMyType(var_name) != expr.type:
-            self.error(f"Type mismatch in assignment to '{var_name}'.")
+        self.eat('IDENTIFIER')
+        self.eat('OPERATOR', '=')
+        expr = self.parse_expression()
+        var_type = self.getMyType(var_name)
+        expr_type = self.getMyType(expr.identifier) if isinstance(expr, FactorNode) else None
+        self.checkTypeMatch(var_type, expr_type)
         return AssignmentNode(var_name, expr)
-
-    def parse_if_statement(self):
-        self.eat('IF')
-        condition = self.parse_condition()
-        self.eat('THEN')
-        self.enter_scope('if')
-        if_block = self.parse_block()  # Implement parse_block to handle a series of statements
-        self.leave_scope()
-        else_block = None
-        if self.current_token.type == 'ELSE':
-            self.eat('ELSE')
-            self.enter_scope('else')
-            else_block = self.parse_block()
-            self.leave_scope()
-        return IfStatementNode(condition, if_block, else_block)
  
-    def parse_while_loop(self):
-        self.eat('WHILE')
+    def parse_if_statement(self):
+        self.eat('KEYWORD')  # eat 'if'
         condition = self.parse_condition()
-        self.eat('DO')
-        self.enter_scope('while')
-        loop_block = self.parse_block()
+        self.eat('PARENTHESIS', '{')  # eat '{'
+        self.enter_scope()
+        if_block = []
+        while self.current_token.type != 'PARENTHESIS' or self.current_token.value != '}':
+            if_block.append(self.parse_statement())
+        self.eat('PARENTHESIS', '}')  # eat '}'
         self.leave_scope()
+        
+        else_block = []
+        if self.current_token.type == 'KEYWORD' and self.current_token.value == 'else':
+            self.eat('KEYWORD')  # eat 'else'
+            self.eat('PARENTHESIS', '{')  # eat '{'
+            self.enter_scope()
+            while self.current_token.type != 'PARENTHESIS' or self.current_token.value != '}':
+                else_block.append(self.parse_statement())
+            self.eat('PARENTHESIS', '}')  # eat '}'
+            self.leave_scope()
+        
+        return IfStatementNode(condition, if_block, else_block if else_block else None)
+
+    def parse_while_loop(self):
+        self.eat('KEYWORD')  # eat 'while'
+        condition = self.parse_condition()
+        self.eat('PARENTHESIS', '{')  # eat '{'
+        self.enter_scope()
+        loop_block = []
+        while self.current_token.type != 'PARENTHESIS' or self.current_token.value != '}':
+            loop_block.append(self.parse_statement())
+        self.eat('PARENTHESIS', '}')  # eat '}'
+        self.leave_scope()
+        
         return WhileLoopNode(condition, loop_block)
     
     # No need to check type mismatch here.
     def parse_condition(self):
-        left = self.parse_arithmetic_expression()
-        if self.current_token.type == 'OPERATOR' and self.current_token.value in ('==', '!=', '<', '>', '<=', '>='):
-            operator = self.current_token.value
-            self.eat('OPERATOR')
-            right = self.parse_arithmetic_expression()
-            return ConditionNode(left, operator, right)
-        else:
-            self.error("Error- Expected a comparison operator in the condition.")
+        left = self.parse_expression()
+        operator = self.current_token.value
+        self.eat('OPERATOR')  # eat the relational operator
+        right = self.parse_expression()
+        
+        return ConditionNode(left, operator, right)
 
     def parse_arithmetic_expression(self):
+        return self.parse_expression()
+
+    def parse_expression(self):
         node = self.parse_term()
-        while self.current_token.type in ('PLUS', 'MINUS'):
+        while self.current_token.type == 'OPERATOR' and self.current_token.value in ('+', '-'):
             token = self.current_token
-            self.eat(token.type)
-            right = self.parse_term()
-            # Check consistency between the left and right parts of the expression
-            if node.type != right.type:
-                self.error("Error- Type mismatch in arithmetic expression")
-            node = ArithmeticExpressionNode(token.type, node, right, node.type)
+            self.eat('OPERATOR')
+            node = ArithmeticExpressionNode(token.value, node, self.parse_term(), None)  # Type management needed
         return node
 
     def parse_term(self):
@@ -448,34 +469,24 @@ class Parser:
         while self.current_token.type == 'OPERATOR' and self.current_token.value in ('*', '/'):
             token = self.current_token
             self.eat('OPERATOR')
-            if token.value == '/':
-                # Division
-                node = TermNode('/', node, self.parse_factor(), 'int')  # Adjust types as needed
-            else:  # Multiplication
-                node = TermNode('*', node, self.parse_factor(), 'int')  # Adjust types as needed
+            node = TermNode(token.value, node, self.parse_factor(), None)  # Type management needed
         return node
 
-    def parse_block(self):
-        statements = []
-        while self.current_token.type not in ('EOF', 'ELSE', 'END'):  
-            statements.append(self.parse_statement())
-            if self.current_token.type == 'DELIMITER':
-                self.eat('DELIMITER')
-        return statements  
-
     def parse_factor(self):
-        token = self.current_token
-        if token.type == 'NUMBER':
-            self.eat('NUMBER')
-            return FactorNode(token.value, 'int')  # Assume int for simplicity
-        elif token.type == 'VARIABLE':
-            if not self.checkVarDeclared(token.value):
-                self.error(f"Variable {token.value} not declared.")
-            self.eat('VARIABLE')
+        if self.current_token.type == 'NUMBER' or self.current_token.type == 'FNUMBER':
+            token = self.current_token
+            self.eat(token.type)
+            return FactorNode(token.value, 'int' if token.type == 'NUMBER' else 'float')
+        elif self.current_token.type == 'IDENTIFIER':
+            token = self.current_token
             var_type = self.getMyType(token.value)
+            self.eat('IDENTIFIER')
             return FactorNode(token.value, var_type)
-        elif token.type == 'PARENTHESIS' and token.value == '(':
-            self.eat('PARENTHESIS')
-            node = self.parse_arithmetic_expression()
-            self.eat('PARENTHESIS')  # Expecting closing parenthesis
+        elif self.current_token.type == 'PARENTHESIS' and self.current_token.value == '(':
+            self.eat('PARENTHESIS', '(')
+            node = self.parse_expression()
+            self.eat('PARENTHESIS', ')')
             return node
+        else:
+            self.error("Invalid syntax in factor")
+            return None
