@@ -163,7 +163,7 @@ class FactorNode(Node):
 class Parser:
     def __init__(self, lexer):
         self.lexer = lexer
-        self.current_token = self.lexer.get_next_token()
+        self.current_token = self.lexer.get_token()
         self.symbol_table_stack = [{}]
         self.messages = []
 
@@ -172,7 +172,7 @@ class Parser:
 
     def eat(self, token_type, token_value=None):
         if self.current_token.type == token_type and (token_value is None or self.current_token.value == token_value):
-            self.current_token = self.lexer.get_next_token()
+            self.current_token = self.lexer.get_token()
         else:
             expected = f"{token_type} with value {token_value}" if token_value else f"{token_type}"
             found = f"{self.current_token.type} with value {self.current_token.value}"
