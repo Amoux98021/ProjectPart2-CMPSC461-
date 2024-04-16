@@ -167,8 +167,9 @@ class Parser:
         self.symbol_table_stack = [{}]
         self.messages = []
 
-    def error(self, message):
-        self.messages.append(message)
+    def error(self, message_type, detail):
+        full_message = f"{message_type}: {detail}"
+        self.messages.append(full_message)
 
     def eat(self, token_type, token_value=None):
         if self.current_token.type == token_type and (token_value is None or self.current_token.value == token_value):
@@ -176,7 +177,7 @@ class Parser:
         else:
             expected = f"{token_type} with value {token_value}" if token_value else f"{token_type}"
             found = f"{self.current_token.type} with value {self.current_token.value}"
-            self.error(f'Expected token {expected}, but found {found}')
+            self.error("Syntax Error", f'Expected token {expected}, but found {found}')
 
     def enter_scope(self):
         self.symbol_table_stack.append({})
@@ -189,15 +190,15 @@ class Parser:
 
     def check_var_declared(self, identifier):
         if identifier in self.current_scope():
-            self.error(f'Variable {identifier} has already been declared in the current scope')
+            self.error("Declaration Error", f'Variable {identifier} has already been declared in the current scope')
 
     def check_var_use(self, identifier):
         if not any(identifier in scope for scope in self.symbol_table_stack):
-            self.error(f'Variable {identifier} has not been declared in the current or any enclosing scopes')
+            self.error("Declaration Error", f'Variable {identifier} has not been declared in the current or any enclosing scopes')
 
     def check_type_match(self, declared_type, actual_type, identifier):
         if declared_type != actual_type:
-            self.error(f'Type mismatch for {identifier}: expected {declared_type}, got {actual_type}')
+            self.error("Type Mismatch", f'expected {declared_type}, got {actual_type} for variable {identifier}')
 
     def parse_program(self):
         statements = []
@@ -215,7 +216,7 @@ class Parser:
         elif self.current_token.type == 'WHILE':
             return self.parse_while_loop()
         else:
-            self.error("Syntax Error: Unexpected token " + self.current_token.type)
+            self.error("Syntax Error", f"Unexpected token {self.current_token.type}")
             return None
 
     def parse_declaration(self):
@@ -235,11 +236,10 @@ class Parser:
         self.eat('VARIABLE')
         self.eat('OPERATOR', '=')
         expr = self.parse_arithmetic_expression()
-        # Verify type consistency
         var_type = self.current_scope().get(var_name)
         expr_type = expr.type if hasattr(expr, 'type') else None
         if var_type != expr_type:
-            self.error(f"Type mismatch: cannot assign {expr_type} to {var_type}")
+            self.error("Type Mismatch", f"cannot assign {expr_type} to {var_type} in variable '{var_name}'")
         return AssignmentNode(var_name, expr)
 
     def parse_if_statement(self):
@@ -315,7 +315,7 @@ class Parser:
             self.eat('VARIABLE')
             return FactorNode(var_name, var_type)
         else:
-            self.error("Syntax Error: Expected a number or variable")
+            self.error("Syntax Error", "Expected a number or variable")
             return None
 
     def print_parse_tree(self, node, indent=0):
